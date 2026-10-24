@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ChatType {
+  DIRECT
+  GROUP
+}
+
+enum MemberRole {
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  name         String
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  chats        ChatMember[]
+  sentMessages Message[]    @relation("MessageSender")
+  messageReads MessageRead[]
+  lastSeen     ChatLastSeen[]
+
+  @@map("users")
+}
+
+model Chat {
+  id        Int          @id @default(autoincrement())
+  type      ChatType
+  name      String?
+  createdBy Int          @map("created_by")
+  createdAt DateTime     @default(now()) @map("created_at")
+  members   ChatMember[]
+  messages  Message[]
+  lastSeen  ChatLastSeen[]
+
+  @@map("chats")
+}
+
+model ChatMember {
+  id       Int        @id @default(autoincrement())
+  chatId   Int        @map("chat_id")
+  userId   Int        @map("user_id")
+  role     MemberRole @default(MEMBER)
+  joinedAt DateTime   @default(now()) @map("joined_at")
+  chat     Chat       @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, userId])
+  @@map("chat_members")
+}
+
+model Message {
+  id        String        @id @default(cuid())
+  chatId    Int           @map("chat_id")
+  senderId  Int           @map("sender_id")
+  text      String
+  createdAt DateTime      @default(now()) @map("created_at")
+  chat      Chat          @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender    User          @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  reads     MessageRead[]
+
+  @@index([chatId, createdAt])
+  @@map("messages")
+}
+
+model MessageRead {
+  id        Int      @id @default(autoincrement())
+  messageId String   @map("message_id")
+  userId    Int      @map("user_id")
+  readAt    DateTime @default(now()) @map("read_at")
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("message_reads")
+}
+
+model ChatLastSeen {
+  chatId    Int      @map("chat_id")
+  userId    Int      @map("user_id")
+  messageId String   @map("message_id")
+  updatedAt DateTime @default(now()) @map("updated_at")
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, userId])
+  @@map("chat_last_seen")
+}
